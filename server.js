@@ -1,16 +1,13 @@
-// server.js - Versão CORRETA e Final (Apenas código do servidor)
+// server.js - Versão Final com Lógica Robusta de IP Único
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors'); 
 
 const app = express();
-// Use a porta fornecida pelo Render
 const port = process.env.PORT || 3000; 
 
-// Conexão com o Banco de Dados PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Configuração de SSL necessária para conexões seguras no Render
   ssl: {
     rejectUnauthorized: false,
   }
@@ -22,8 +19,10 @@ app.use(cors());
 // ROTA: CONTADOR DE VIEWS ÚNICAS (/api/views)
 // ==========================================================
 app.get('/api/views', async (req, res) => {
-    // 1. Obtém o IP real do cliente.
-    const clientIp = req.header('x-forwarded-for') || req.socket.remoteAddress;
+    // 1. OBTÉM O IP DE FORMA ROBUSTA:
+    const forwarded = req.header('x-forwarded-for');
+    // Se o cabeçalho existir, usa o primeiro IP (o do cliente real). Caso contrário, usa o IP da conexão direta.
+    const clientIp = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
 
     const client = await pool.connect();
     let isNewView = false;
@@ -55,7 +54,6 @@ app.get('/api/views', async (req, res) => {
         console.error('Erro na query do BD', err);
         res.status(500).json({ views: 'Erro na API' });
     } finally {
-        // 7. Libera o cliente de volta para o pool
         client.release();
     }
 });
