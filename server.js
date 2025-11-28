@@ -1,72 +1,107 @@
-// server.js - Código corrigido com lógica de IP único
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors'); 
+// --- CONFIGURAÇÕES --
+const TYPING_TEXT = "vindalfar"; 
+const TYPING_SPEED = 150; 
+const TYPING_DELAY = 1500; 
 
-const app = express();
-// Use a porta fornecida pelo Render
-const port = process.env.PORT || 3000; 
+// Substitua esta URL pela URL completa do seu backend no Render
+const API_URL = 'https://backend-65c0.onrender.com/api/views'; 
 
-// Conexão com o Banco de Dados PostgreSQL
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Configuração de SSL necessária para conexões seguras no Render
-  ssl: {
-    rejectUnauthorized: false,
-  }
-});
-
-app.use(cors());
-
-// ==========================================================
-// ROTA: CONTADOR DE VIEWS ÚNICAS (/api/views)
-// ==========================================================
-app.get('/api/views', async (req, res) => {
-    // 1. Obtém o IP real do cliente. O Render usa o cabeçalho 'x-forwarded-for'.
-    const clientIp = req.header('x-forwarded-for') || req.socket.remoteAddress;
-
-    const client = await pool.connect();
-    let isNewView = false;
-    
+// --- LÓGICA DO CONTADOR DE VISUALIZAÇÕES CORRIGIDA ---
+async function updateViewCounter() {
     try {
-        // 2. Tenta inserir o IP na tabela visited_ips
-        // Se o IP já existir (ON CONFLICT), ele não faz nada (DO NOTHING).
-        const ipInsertResult = await client.query(
-            'INSERT INTO visited_ips (ip_address) VALUES ($1) ON CONFLICT (ip_address) DO NOTHING RETURNING ip_address',
-            [clientIp]
-        );
+        // 1. Geração de Timestamp para Cache-Busting
+        const timestamp = new Date().getTime();
         
-        // 3. Verifica se o IP foi inserido (rowCount > 0 significa que é um IP novo)
-        if (ipInsertResult.rowCount > 0) {
-            // 4. Se o IP for novo, incrementa o contador principal
-            await client.query('UPDATE views SET count = count + 1 WHERE id = 1');
-            isNewView = true;
+        // Concatena o timestamp à URL da API para FORÇAR uma nova requisição
+        const response = await fetch(`${API_URL}?t=${timestamp}`); 
+        
+        if (!response.ok) { 
+            console.error(`Erro HTTP: ${response.status} ${response.statusText}. O servidor backend pode estar offline.`);
+            document.getElementById('views-number').textContent = 'Erro';
+            return;
         }
-        
-        // 5. Busca o valor atualizado do contador
-        const result = await client.query('SELECT count FROM views WHERE id = 1');
-        
-        // 6. Retorna a resposta
-        res.json({ 
-            views: result.rows[0].count,
-            // A mensagem de debug é opcional, mas útil para confirmar a lógica
-            message: isNewView ? "View única contabilizada." : "IP já registrado. View não contabilizada."
-        }); 
 
-    } catch (err) {
-        console.error('Erro na query do BD', err);
-        // Em caso de erro (ex: tabela não existe), retorna 500
-        res.status(500).json({ views: 'Erro na API' });
-    } finally {
-        // 7. Libera o cliente de volta para o pool de conexões
-        client.release();
+        const data = await response.json();
+
+        // 🚨 2. CORREÇÃO DE ID: Usa o ID correto 'views-number' (visto no index.html)
+        const viewCountElement = document.getElementById('views-number');
+        
+        if (viewCountElement && data.views !== undefined) {
+            viewCountElement.textContent = data.views.toLocaleString();
+        } else {
+            // Se o elemento não for encontrado ou os dados estiverem ausentes
+            if (viewCountElement) viewCountElement.textContent = 'Erro';
+            else console.error("Elemento HTML com ID 'views-number' não encontrado.");
+        }
+
+        // Log para debug (o backend deve dizer "IP já registrado" em F5)
+        console.log("Resposta da API:", data.message);
+
+    } catch (error) {
+        console.error("Erro ao conectar ao backend:", error);
+        document.getElementById('views-number').textContent = 'Erro';
     }
-});
+}
 
-// ==========================================================
-// INICIA O SERVIDOR
-// ==========================================================
-app.listen(port, () => { 
-  console.log(`Servidor rodando na porta ${port}`);
-  console.log(`Backend rodando em http://localhost:${port}`);
+// --- RESTANTE DO SEU CÓDIGO JS ---
+
+// Funções que devem existir no seu arquivo, mas que não estão no foco da correção
+// (Deixei apenas as definições mínimas para o contexto)
+
+// Função para iniciar o efeito de digitação e os efeitos do perfil
+function startProfileEffects() {
+    // ... seu código para o efeito de digitação
+}
+
+// Função para configuração do player de música
+function setupMusicPlayer() {
+    // ... seu código para o player
+}
+
+// Função para setup do efeito de faíscas
+function setupFairyDustEffect() {
+    // ... seu código para o efeito
+}
+
+// Função para setup do cursor
+function setupCursorToggle() {
+    // ... seu código para o cursor
+}
+
+
+// Função que é chamada UMA VEZ na interação inicial do usuário
+function handleInteractionOnce() {
+    const introScreen = document.getElementById('intro-screen');
+    const mainContent = document.getElementById('main-content');
+    
+    document.removeEventListener('keydown', handleInteractionOnce);
+    document.removeEventListener('click', handleInteractionOnce);
+
+    introScreen.style.opacity = 0;
+
+    setTimeout(() => {
+        introScreen.classList.add('hidden');
+        mainContent.classList.remove('hidden');
+        
+        startProfileEffects();
+        
+        // ... (código do player de música)
+        
+    }, 500); 
+    
+    // 🚨 CHAMADA DO CONTADOR APÓS INTERAÇÃO
+    updateViewCounter();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Adiciona o listener para a interação inicial
+    document.addEventListener('keydown', handleInteractionOnce);
+    document.addEventListener('click', handleInteractionOnce);
+    
+    // Opcional: Remova ou comente esta linha para evitar que '...' apareça
+    // document.getElementById('views-number').textContent = '...'; 
+    
+    setupMusicPlayer();
+    setupFairyDustEffect();
+    setupCursorToggle(); 
 });
