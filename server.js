@@ -1,4 +1,3 @@
-// server.js - Versão Final com Lógica Robusta de IP Único
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors'); 
@@ -14,29 +13,19 @@ const pool = new Pool({
 });
 
 app.use(cors());
-
-// ==========================================================
-// ROTA: CONTADOR DE VIEWS ÚNICAS (/api/views)
-// ==========================================================
 app.get('/api/views', async (req, res) => {
-    // 1. OBTÉM O IP DE FORMA ROBUSTA:
     const forwarded = req.header('x-forwarded-for');
-    // Se o cabeçalho existir, usa o primeiro IP (o do cliente real). Caso contrário, usa o IP da conexão direta.
     const clientIp = forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress;
 
     const client = await pool.connect();
     let isNewView = false;
     
     try {
-        // 2. Tenta inserir o IP na tabela visited_ips
         const ipInsertResult = await client.query(
             'INSERT INTO visited_ips (ip_address) VALUES ($1) ON CONFLICT (ip_address) DO NOTHING RETURNING ip_address',
             [clientIp]
         );
-        
-        // 3. Verifica se o IP é novo
         if (ipInsertResult.rowCount > 0) {
-            // 4. Se for novo, incrementa o contador principal
             await client.query('UPDATE views SET count = count + 1 WHERE id = 1');
             isNewView = true;
         }
@@ -58,9 +47,6 @@ app.get('/api/views', async (req, res) => {
     }
 });
 
-// ==========================================================
-// INICIA O SERVIDOR
-// ==========================================================
 app.listen(port, () => { 
   console.log(`Servidor rodando na porta ${port}`);
 });
